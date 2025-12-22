@@ -1,0 +1,61 @@
+{
+  "name": "ocr_tool",
+  "description": "Performs OCR on images and returns structured text with layout information",
+  "version": "1.0.0",
+  "endpoint": "http://localhost:8001",
+  "methods": [
+    {
+      "name": "ocr",
+      "path": "/ocr",
+      "method": "POST",
+      "description": "Extract text from an image with layout preservation",
+      "input": {
+        "type": "object",
+        "properties": {
+          "image_base64": {
+            "type": "string",
+            "description": "Base64 encoded image"
+          },
+          "prompt_type": {
+            "type": "string",
+            "enum": ["ocr_layout", "ocr"],
+            "default": "ocr_layout",
+            "description": "ocr_layout: with bounding boxes, ocr: plain text only"
+          },
+          "custom_prompt": {
+            "type": "string",
+            "description": "Custom prompt to override default behavior"
+          }
+        },
+        "required": ["image_base64"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "raw": {
+            "type": "string",
+            "description": "Raw model output in HTML format"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Parsed markdown output"
+          },
+          "token_count": {
+            "type": "integer",
+            "description": "Number of tokens generated"
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Whether an error occurred"
+          }
+        }
+      }
+    },
+    {
+      "name": "health",
+      "path": "/health",
+      "method": "GET",
+      "description": "Check service health status"
+    }
+  ]
+}

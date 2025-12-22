@@ -1,0 +1,21 @@
+[project]
+name = "ocr-tool"
+version = "0.1.0"
+description = "OCR Tool API for AI Agents"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "pillow>=10.0.0",
+    "chandra-ocr>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "requests>=2.32.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "requests>=2.32.0",
+]
