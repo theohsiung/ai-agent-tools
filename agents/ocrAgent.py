@@ -36,10 +36,18 @@ session_service = InMemorySessionService()
 my_user_id = "user_12345"
 
 # Use vLLM as OpenAI-compatible endpoint
+# base_model = LiteLlm(
+#     model=f"openai/{VLLM_MODEL}",
+#     api_base=VLLM_API_BASE,
+#     api_key="EMPTY",  # vLLM doesn't require API key
+#     timeout=120
+# )
+# Use local MiniTral model via Ollama API
 base_model = LiteLlm(
-    model=f"openai/{VLLM_MODEL}",
-    api_base=VLLM_API_BASE,
-    api_key="EMPTY",  # vLLM doesn't require API key
+    model="ollama_chat/minitral-3:3b",
+    api_base="http://localhost:11434",
+    api_key="dummy",
+    stream=True,
     timeout=120
 )
 
