@@ -16,7 +16,7 @@ print("✅ All libraries are ready to go!")
 
 # vLLM configuration
 VLLM_API_BASE = os.environ.get("VLLM_API_BASE", "http://0.0.0.0:8000/v1")
-VLLM_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
+VLLM_MODEL = "gpt-oss-20b"
 
 OCR_MCP_PATH = os.path.join(os.path.dirname(__file__), "..", "tools", "ocr_tool_mcp")
 
@@ -36,20 +36,20 @@ session_service = InMemorySessionService()
 my_user_id = "user_12345"
 
 # Use vLLM as OpenAI-compatible endpoint
-# base_model = LiteLlm(
-#     model=f"openai/{VLLM_MODEL}",
-#     api_base=VLLM_API_BASE,
-#     api_key="EMPTY",  # vLLM doesn't require API key
-#     timeout=120
-# )
-# Use local MiniTral model via Ollama API
 base_model = LiteLlm(
-    model="ollama_chat/minitral-3:3b",
-    api_base="http://localhost:11434",
-    api_key="dummy",
-    stream=True,
+    model=f"openai/{VLLM_MODEL}",
+    api_base=VLLM_API_BASE,
+    api_key="sk-1234",  # vLLM doesn't require API key
     timeout=120
 )
+# Use local MiniTral model via Ollama API
+# base_model = LiteLlm(
+#     model="ollama_chat/minitral-3:3b",
+#     api_base="http://localhost:11434",
+#     api_key="dummy",
+#     stream=True,
+#     timeout=120
+# )
 
 async def create_mcp_toolset():
     """Create MCP toolset for OCR."""
@@ -127,7 +127,7 @@ async def run_ocr(image_path: str):
 
 
 def main():
-    image_path = "/home/theo/projects/ai-agent-tools/asset/example_slide.png"
+    image_path = "/home/os-theo.hsiung/projects/ai-agent-tools/asset/example_slide.png"
     result = asyncio.run(run_ocr(image_path))
     print("\n📝 Final OCR Markdown Output:\n")
     print(result)
