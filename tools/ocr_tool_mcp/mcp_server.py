@@ -1,17 +1,11 @@
-import base64
-import io
+import sys
+import threading
 from enum import Enum
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
-from PIL import Image
 from pydantic import BaseModel, Field
-from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
-
-from chandra.model.hf import generate_hf
-from chandra.model.schema import BatchInputItem
-from chandra.output import parse_markdown
 
 
 class PromptType(str, Enum):
@@ -20,36 +14,59 @@ class PromptType(str, Enum):
 
 
 class OCRInput(BaseModel):
-    image_base64: str = Field(..., description="Base64 encoded image")
+    image_path: str = Field(..., description="Path to image file")
     prompt_type: str = Field(default="ocr_layout", description="Prompt type: 'ocr_layout' or 'ocr'")
     custom_prompt: str | None = Field(default=None, description="Custom prompt (overrides prompt_type)")
 
 
 # Global model instance
 model = None
+model_loading = False
+model_lock = threading.Lock()
 
 
 def load_model():
-    global model
-    if model is None:
-        print("Loading OCR model...")
-        model = Qwen3VLForConditionalGeneration.from_pretrained("datalab-to/chandra").cuda()
-        model.processor = AutoProcessor.from_pretrained("datalab-to/chandra")
-        print("Model loaded!")
+    global model, model_loading
+    with model_lock:
+        if model is None and not model_loading:
+            model_loading = True
+            from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+            print("Loading OCR model on GPU 5...", file=sys.stderr)
+            # ✅ 改成 cuda(5)，使用空閒的 GPU 5
+            model = Qwen3VLForConditionalGeneration.from_pretrained("datalab-to/chandra").cuda(5)
+            model.processor = AutoProcessor.from_pretrained("datalab-to/chandra")
+            print("Model loaded on GPU 5!", file=sys.stderr)
     return model
 
 
-def decode_base64_image(image_base64: str) -> Image.Image:
-    image_data = base64.b64decode(image_base64)
-    image = Image.open(io.BytesIO(image_data)).convert("RGB")
-    return image
+def start_background_loading():
+    """Start loading model in background thread."""
+    thread = threading.Thread(target=load_model, daemon=True)
+    thread.start()
 
 
-def perform_ocr(image_base64: str, prompt_type: str = "ocr_layout", custom_prompt: str | None = None) -> dict:
+def wait_for_model(timeout=60):
+    """Wait for model to be loaded."""
+    import time
+    start = time.time()
+    while model is None:
+        if time.time() - start > timeout:
+            raise TimeoutError("Model loading timed out")
+        time.sleep(0.5)
+    return model
+
+
+def perform_ocr(image_path: str, prompt_type: str = "ocr_layout", custom_prompt: str | None = None) -> dict:
     """Perform OCR on an image."""
-    load_model()
+    from PIL import Image
+    from chandra.model.hf import generate_hf
+    from chandra.model.schema import BatchInputItem
+    from chandra.output import parse_markdown
+    
+    # 等待模型載入完成
+    wait_for_model(timeout=120)
 
-    image = decode_base64_image(image_base64)
+    image = Image.open(image_path).convert("RGB")
 
     batch = [
         BatchInputItem(
@@ -80,26 +97,26 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="ocr",
-            description="Perform OCR on an image and return structured text with layout information. Supports two modes: 'ocr_layout' (includes bounding boxes) and 'ocr' (plain text only).",
+            description="Perform OCR on an image file and return structured text with layout information.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "image_base64": {
+                    "image_path": {
                         "type": "string",
-                        "description": "Base64 encoded image data"
+                        "description": "Path to the image file"
                     },
                     "prompt_type": {
                         "type": "string",
                         "enum": ["ocr_layout", "ocr"],
                         "default": "ocr_layout",
-                        "description": "OCR mode: 'ocr_layout' for layout detection with bounding boxes, 'ocr' for plain text"
+                        "description": "OCR mode"
                     },
                     "custom_prompt": {
                         "type": "string",
-                        "description": "Optional custom prompt to override the default prompt type"
+                        "description": "Optional custom prompt"
                     }
                 },
-                "required": ["image_base64"]
+                "required": ["image_path"]
             }
         )
     ]
@@ -113,7 +130,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     try:
         result = perform_ocr(
-            image_base64=arguments["image_base64"],
+            image_path=arguments["image_path"],
             prompt_type=arguments.get("prompt_type", "ocr_layout"),
             custom_prompt=arguments.get("custom_prompt")
         )
@@ -136,11 +153,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=response_text)]
 
     except Exception as e:
+        import traceback
+        print(traceback.format_exc(), file=sys.stderr)
         return [TextContent(type="text", text=f"OCR Error: {str(e)}")]
 
 
 async def main():
     """Run the MCP server."""
+    # ✅ 背景開始載入模型
+    start_background_loading()
+    print("Background model loading started...", file=sys.stderr)
+    
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

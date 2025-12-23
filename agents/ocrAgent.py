@@ -1,7 +1,6 @@
 # --- Import all necessary libraries ---
 import os
 import sys
-import base64
 import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
@@ -15,22 +14,10 @@ load_dotenv()
 print("✅ All libraries are ready to go!")
 
 # vLLM configuration
-VLLM_API_BASE = os.environ.get("VLLM_API_BASE", "http://0.0.0.0:8000/v1")
-VLLM_MODEL = "gpt-oss-20b"
+VLLM_API_BASE = os.environ.get("VLLM_API_BASE", "http://localhost:8000/v1")
+VLLM_MODEL = "openai/gpt-oss-20b"
 
 OCR_MCP_PATH = os.path.join(os.path.dirname(__file__), "..", "tools", "ocr_tool_mcp")
-
-
-def load_image_as_base64(image_path: str) -> str:
-    """Load an image file and convert to base64 string."""
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Image not found: {image_path}")
-
-    with open(path, "rb") as f:
-        image_data = f.read()
-
-    return base64.b64encode(image_data).decode("utf-8")
 
 session_service = InMemorySessionService()
 my_user_id = "user_12345"
@@ -39,17 +26,11 @@ my_user_id = "user_12345"
 base_model = LiteLlm(
     model=f"openai/{VLLM_MODEL}",
     api_base=VLLM_API_BASE,
-    api_key="sk-1234",  # vLLM doesn't require API key
-    timeout=120
+    api_key="sk-1234",
+    timeout=120,
+    stream=True,
 )
-# Use local MiniTral model via Ollama API
-# base_model = LiteLlm(
-#     model="ollama_chat/minitral-3:3b",
-#     api_base="http://localhost:11434",
-#     api_key="dummy",
-#     stream=True,
-#     timeout=120
-# )
+
 
 async def create_mcp_toolset():
     """Create MCP toolset for OCR."""
@@ -61,9 +42,9 @@ async def create_mcp_toolset():
     )
     return ocr_toolset
 
+
 async def create_agents():
     """Create agents with MCP tools. Returns (agent, toolset) tuple."""
-    # Get OCR tools from MCP server
     ocr_toolset = await create_mcp_toolset()
     tools = await ocr_toolset.get_tools()
     print(f"📦 Loaded {len(tools)} tools from OCR MCP server")
@@ -73,8 +54,10 @@ async def create_agents():
         name="ocr_agent",
         model=base_model,
         tools=tools,
-        instruction="""你是一為OCR助手。當用戶提供一張圖片（以base64編碼）時，
-                    使用'ocr'工具從中提取文字與HTML格式。""",
+        instruction="""你是一個 OCR 助手。當用戶提供圖片路徑時：
+        1. 使用 ocr tool，將 image_path 作為參數傳入
+        2. 回傳 OCR 結果
+        """,
         output_key="ocr_result"
     )
 
@@ -98,10 +81,14 @@ async def run_ocr(image_path: str):
     """Run OCR on an image file."""
     print("🚀 Starting OCR Agent...")
 
-    # Load image as base64
-    print(f"📷 Loading image: {image_path}")
-    image_base64 = load_image_as_base64(image_path)
-    print(f"✅ Image loaded ({len(image_base64)} chars)")
+    # 確認圖片存在
+    path = Path(image_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Image not found: {image_path}")
+    
+    # 轉換成絕對路徑
+    absolute_path = str(path.resolve())
+    print(f"📷 Image path: {absolute_path}")
 
     # Create agent with MCP tools
     ocr_md_gen_agent, ocr_toolset = await create_agents()
@@ -113,15 +100,14 @@ async def run_ocr(image_path: str):
             user_id=my_user_id
         )
 
-        # Create query with base64 image
-        query = f"請對以下 base64 編碼的圖片進行 OCR 辨識：\n\n{image_base64}"
-        print(f"🗣️ Sending image to OCR agent...")
+        # ✅ 只傳檔案路徑，非常短
+        query = f"請使用 ocr tool 對這個圖片進行 OCR 辨識，圖片路徑是：{absolute_path}"
+        print(f"🗣️ Sending OCR request to agent...")
 
         result = await run_agent_query(ocr_md_gen_agent, query, session, my_user_id, session_service)
         return result
 
     finally:
-        # Clean up MCP connection
         await ocr_toolset.close()
         print("🔌 MCP connection closed")
 
@@ -131,7 +117,6 @@ def main():
     result = asyncio.run(run_ocr(image_path))
     print("\n📝 Final OCR Markdown Output:\n")
     print(result)
-
 
 
 if __name__ == "__main__":
