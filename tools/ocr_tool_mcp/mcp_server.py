@@ -1,58 +1,25 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+
 import sys
-import threading
-from enum import Enum
-
 from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
-from pydantic import BaseModel, Field
-
-
-class PromptType(str, Enum):
-    ocr_layout = "ocr_layout"
-    ocr = "ocr"
-
-
-class OCRInput(BaseModel):
-    image_path: str = Field(..., description="Path to image file")
-    prompt_type: str = Field(default="ocr_layout", description="Prompt type: 'ocr_layout' or 'ocr'")
-    custom_prompt: str | None = Field(default=None, description="Custom prompt (overrides prompt_type)")
+from mcp.server.sse import SseServerTransport
+import uvicorn
 
 
 # Global model instance
 model = None
-model_loading = False
-model_lock = threading.Lock()
 
 
 def load_model():
-    global model, model_loading
-    with model_lock:
-        if model is None and not model_loading:
-            model_loading = True
-            from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
-            print("Loading OCR model on GPU 5...", file=sys.stderr)
-            # ✅ 改成 cuda(5)，使用空閒的 GPU 5
-            model = Qwen3VLForConditionalGeneration.from_pretrained("datalab-to/chandra").cuda(5)
-            model.processor = AutoProcessor.from_pretrained("datalab-to/chandra")
-            print("Model loaded on GPU 5!", file=sys.stderr)
-    return model
-
-
-def start_background_loading():
-    """Start loading model in background thread."""
-    thread = threading.Thread(target=load_model, daemon=True)
-    thread.start()
-
-
-def wait_for_model(timeout=60):
-    """Wait for model to be loaded."""
-    import time
-    start = time.time()
-    while model is None:
-        if time.time() - start > timeout:
-            raise TimeoutError("Model loading timed out")
-        time.sleep(0.5)
+    global model
+    if model is None:
+        from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+        
+        print("Loading OCR model...", file=sys.stderr)
+        model = Qwen3VLForConditionalGeneration.from_pretrained("datalab-to/chandra").cuda()
+        model.processor = AutoProcessor.from_pretrained("datalab-to/chandra")
+        print("Model loaded!", file=sys.stderr)
     return model
 
 
@@ -63,8 +30,7 @@ def perform_ocr(image_path: str, prompt_type: str = "ocr_layout", custom_prompt:
     from chandra.model.schema import BatchInputItem
     from chandra.output import parse_markdown
     
-    # 等待模型載入完成
-    wait_for_model(timeout=120)
+    load_model()
 
     image = Image.open(image_path).convert("RGB")
 
@@ -92,12 +58,12 @@ server = Server("ocr-tool-mcp")
 
 
 @server.list_tools()
-async def list_tools() -> list[Tool]:
-    """List available OCR tools."""
+async def list_tools():
+    from mcp.types import Tool
     return [
         Tool(
             name="ocr",
-            description="Perform OCR on an image file and return structured text with layout information.",
+            description="Perform OCR on an image file",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -108,12 +74,7 @@ async def list_tools() -> list[Tool]:
                     "prompt_type": {
                         "type": "string",
                         "enum": ["ocr_layout", "ocr"],
-                        "default": "ocr_layout",
-                        "description": "OCR mode"
-                    },
-                    "custom_prompt": {
-                        "type": "string",
-                        "description": "Optional custom prompt"
+                        "default": "ocr_layout"
                     }
                 },
                 "required": ["image_path"]
@@ -123,17 +84,20 @@ async def list_tools() -> list[Tool]:
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Handle tool calls."""
+async def call_tool(name: str, arguments: dict):
+    from mcp.types import TextContent
+    
     if name != "ocr":
         raise ValueError(f"Unknown tool: {name}")
 
     try:
+        print(f"Performing OCR on: {arguments.get('image_path')}", file=sys.stderr)
         result = perform_ocr(
             image_path=arguments["image_path"],
             prompt_type=arguments.get("prompt_type", "ocr_layout"),
             custom_prompt=arguments.get("custom_prompt")
         )
+        print("OCR completed!", file=sys.stderr)
 
         response_text = f"""## OCR Result
 
@@ -142,13 +106,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 **Token Count:** {result['token_count']}
 **Error:** {result['error']}
-
-<details>
-<summary>Raw Output</summary>
-
-{result['raw']}
-
-</details>
 """
         return [TextContent(type="text", text=response_text)]
 
@@ -158,20 +115,59 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"OCR Error: {str(e)}")]
 
 
-async def main():
-    """Run the MCP server."""
-    # ✅ 背景開始載入模型
-    start_background_loading()
-    print("Background model loading started...", file=sys.stderr)
-    
-    async with stdio_server() as (read_stream, write_stream):
+# SSE transport - 使用 ASGI 方式
+sse = SseServerTransport("/messages/")
+
+
+async def handle_sse(scope, receive, send):
+    """Handle SSE connection as raw ASGI."""
+    async with sse.connect_sse(scope, receive, send) as streams:
         await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options()
+            streams[0], streams[1], server.create_initialization_options()
         )
 
 
+async def handle_messages(scope, receive, send):
+    """Handle POST messages as raw ASGI."""
+    await sse.handle_post_message(scope, receive, send)
+
+
+async def app(scope, receive, send):
+    """Main ASGI application."""
+    if scope["type"] == "http":
+        path = scope["path"]
+        method = scope["method"]
+        
+        if path == "/sse" and method == "GET":
+            await handle_sse(scope, receive, send)
+        elif path.startswith("/messages/") and method == "POST":
+            await handle_messages(scope, receive, send)
+        else:
+            # 404 response
+            await send({
+                "type": "http.response.start",
+                "status": 404,
+                "headers": [[b"content-type", b"text/plain"]],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"Not Found",
+            })
+    elif scope["type"] == "lifespan":
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                await send({"type": "lifespan.shutdown.complete"})
+                return
+
+
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    print("🚀 Starting OCR MCP Server...")
+    print("⏳ Pre-loading model...")
+    load_model()
+    print("✅ Model ready!")
+    print("🌐 Server running on http://localhost:8888")
+    
+    uvicorn.run(app, host="0.0.0.0", port=8888)

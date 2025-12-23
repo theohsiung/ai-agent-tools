@@ -32,16 +32,25 @@ base_model = LiteLlm(
 )
 
 
+# async def create_mcp_toolset():
+#     """Create MCP toolset for OCR."""
+#     ocr_toolset = McpToolset(
+#         connection_params=StdioServerParameters(
+#             command="uv",
+#             args=["run", "--directory", OCR_MCP_PATH, "python", "mcp_server.py"],
+#         )
+#     )
+#     return ocr_toolset
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
+
 async def create_mcp_toolset():
-    """Create MCP toolset for OCR."""
+    """Create MCP toolset for OCR - connect to running server."""
     ocr_toolset = McpToolset(
-        connection_params=StdioServerParameters(
-            command="uv",
-            args=["run", "--directory", OCR_MCP_PATH, "python", "mcp_server.py"],
+        connection_params=SseConnectionParams(
+            url="http://localhost:8888/sse",
         )
     )
     return ocr_toolset
-
 
 async def create_agents():
     """Create agents with MCP tools. Returns (agent, toolset) tuple."""
@@ -116,7 +125,7 @@ def main():
     image_path = "/home/os-theo.hsiung/projects/ai-agent-tools/asset/example_slide.png"
     result = asyncio.run(run_ocr(image_path))
     print("\n📝 Final OCR Markdown Output:\n")
-    print(result)
+    # print(result)
 
 
 if __name__ == "__main__":
