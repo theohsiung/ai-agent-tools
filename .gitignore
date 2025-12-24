@@ -30,3 +30,6 @@ local.env
 # Model cache
 .cache/
 models/
+
+# Agent for antigravity
+.agent/

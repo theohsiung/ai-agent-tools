@@ -36,7 +36,7 @@ base_model = LiteLlm(
     stream=True,
 )
 
-
+# Run MCP server via stdio
 # async def create_mcp_toolset():
 #     """Create MCP toolset for OCR."""
 #     ocr_toolset = McpToolset(
@@ -46,8 +46,9 @@ base_model = LiteLlm(
 #         )
 #     )
 #     return ocr_toolset
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
 
+# Run MCP server via SSE
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
 async def create_mcp_toolset():
     """Create MCP toolset for OCR - connect to running server."""
     ocr_toolset = McpToolset(
