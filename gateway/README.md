@@ -56,19 +56,19 @@ GET /health
 
 Tools are registered in `main.py`:
 
-| Tool | Port | Endpoint |
-|------|------|----------|
-| ocr_tool | 8001 | http://localhost:8001 |
-| tts_tool | 8002 | http://localhost:8002 |
-| embedding_tool | 8003 | http://localhost:8003 |
+| Tool | Port | Endpoint | Status |
+|------|------|----------|--------|
+| ocr_tool_mcp | 8888 | http://localhost:8888 | Ready (via SSE) |
+| ocr_agent | 8000 | http://localhost:8000 | Ready (A2A Server) |
+| tts_tool | 8002 | http://localhost:8002 | TODO |
 
-## Adding New Tools
+## Adding New Tools/Agents
 
 Edit `TOOL_REGISTRY` in `main.py`:
 
 ```python
 TOOL_REGISTRY = {
-    "ocr_tool": "http://localhost:8001",
-    "my_new_tool": "http://localhost:8004",
+    "ocr_tool_mcp": "http://localhost:8888",
+    "ocr_agent": "http://localhost:8000",
 }
 ```

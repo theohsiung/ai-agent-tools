@@ -9,6 +9,7 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioServerParamet
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import InMemorySessionService
 from utils.run_agent_query import run_agent_query
+from shared.a2a_wrapper import serve_agent
 
 load_dotenv()
 print("✅ All libraries are ready to go!")
@@ -121,7 +122,25 @@ async def run_ocr(image_path: str):
         print("🔌 MCP connection closed")
 
 
+async def serve_a2a():
+    """Start the OCR agent as an A2A server."""
+    print("🌐 Starting A2A Server mode...")
+    ocr_md_gen_agent, ocr_toolset = await create_agents()
+    
+    try:
+        server = serve_agent(ocr_md_gen_agent)
+        await server.serve()
+    finally:
+        await ocr_toolset.close()
+        print("🔌 MCP connection closed")
+
+
 def main():
+    # Check if we should run as a server
+    if "--server" in sys.argv:
+        asyncio.run(serve_a2a())
+        return
+
     image_path = "/home/os-theo.hsiung/projects/ai-agent-tools/asset/example_slide.png"
     result = asyncio.run(run_ocr(image_path))
     print("\n📝 Final OCR Markdown Output:\n")

@@ -6,26 +6,27 @@ A collection of local AI model APIs designed as tools for AI Agents (Google ADK 
 
 ```
 ai-agent-tools/
-├── tools/                    # A2A tool services
-│   ├── ocr_tool/            # OCR service (port 8001)
-│   ├── tts_tool/            # TTS service (port 8002) [TODO]
-│   ├── embedding_tool/      # Embedding service (port 8003) [TODO]
+├── tools/                    # Tool services (MCP & A2A)
+│   ├── ocr_tool_mcp/        # OCR MCP service (Ready)
+│   ├── tts_tool/           # TTS service (port 8002) [TODO]
 │   └── ...
-├── agents/                   # Google ADK agents
+├── agents/                   # Google ADK agents (A2A Capable)
+│   └── ocrAgent.py          # OCR + MD Refinement Agent
+├── gateway/                  # API gateway & Proxy
 │   └── ...
-├── gateway/                  # API gateway [TODO]
-│   └── ...
-└── shared/                   # Shared utilities
-    └── ...
+├── shared/                   # Shared utilities
+│   └── a2a_wrapper.py       # Universal A2A Server Wrapper
+└── asset/                    # Static assets
 ```
 
-## Tools
+## Status
 
-| Tool | Port | Description | Status |
-|------|------|-------------|--------|
-| ocr_tool | 8001 | OCR with layout detection | Ready |
-| tts_tool | 8002 | Text-to-Speech | TODO |
-| embedding_tool | 8003 | Text embeddings | TODO |
+| Component | Status | Description |
+|-----------|--------|-------------|
+| OCR MCP Tool | Ready | Local OCR service using Model Context Protocol |
+| A2A Wrapper | Ready | Shared utility to wrap agents as A2A servers |
+| OCR Agent | Ready | A2A-capable agent for document processing |
+| API Gateway | In Progress | Unified access point for tools and agents |
 
 ## Quick Start
 
