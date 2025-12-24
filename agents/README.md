@@ -18,13 +18,13 @@ A powerful agent that combines OCR capabilities with Markdown refinement.
 #### 1. CLI Mode (Individual Task)
 Executes a single OCR task as defined in the `main()` function.
 ```bash
-uv run python ocrAgent.py
+uv run python ocrAgent/ocrAgent.py
 ```
 
 #### 2. A2A Server Mode
 Starts an A2A-compliant HTTP server exposing the agent's capabilities.
 ```bash
-uv run python ocrAgent.py --server
+uv run python ocrAgent/ocrAgent.py --server
 ```
 The server will be available at `http://0.0.0.0:8000`.
 

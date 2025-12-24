@@ -1,8 +1,12 @@
-# --- Import all necessary libraries ---
 import os
 import sys
 import asyncio
 from pathlib import Path
+
+# Add root to sys.path for shared utils as we moved to a subdirectory
+if str(Path(__file__).resolve().parent.parent.parent) not in sys.path:
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+
 from dotenv import load_dotenv
 from google.adk.agents import LlmAgent, SequentialAgent
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioServerParameters
@@ -127,8 +131,12 @@ async def serve_a2a():
     print("🌐 Starting A2A Server mode...")
     ocr_md_gen_agent, ocr_toolset = await create_agents()
     
+    # Path to the Agent Card
+    card_path = os.path.join(os.path.dirname(__file__), "ocrAgent.json")
+    
     try:
-        server = serve_agent(ocr_md_gen_agent)
+        # Pass the card_path to the wrapper
+        server = serve_agent(ocr_md_gen_agent, port=8701, agent_card=card_path)
         await server.serve()
     finally:
         await ocr_toolset.close()

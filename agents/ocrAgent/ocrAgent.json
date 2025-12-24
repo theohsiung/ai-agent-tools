@@ -1,0 +1,20 @@
+{
+  "name": "ocr_md_gen_agent",
+  "version": "1.0.0",
+  "description": "An agent that performs OCR using an MCP tool and refines the output into structured Markdown.",
+  "endpoint": "http://localhost:8701/",
+  "protocol": "a2a",
+  "capabilities": [
+    {
+      "type": "tool",
+      "name": "ocr",
+      "description": "Performs OCR on an image at a given local path."
+    },
+    {
+      "type": "refinement",
+      "name": "markdown_v2",
+      "description": "Converts raw text into structured Markdown with tables and headers."
+    }
+  ],
+  "author": "Theo Hsiung"
+}
